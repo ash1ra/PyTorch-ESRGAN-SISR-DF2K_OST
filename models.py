@@ -2,12 +2,29 @@ import math
 from typing import Literal
 
 import torch
+import torch.nn.init as init
 from torch import Tensor, nn
 from torchvision.models import VGG19_Weights, vgg19
 
 import config
 
 logger = config.create_logger("INFO", __file__)
+
+
+def _init_scaled_weights(module: nn.Module, scale: float = 0.1):
+    if isinstance(module, nn.Conv2d):
+        init.kaiming_normal_(module.weight.data, a=0.0, mode="fan_in")
+        module.weight.data *= scale
+
+        if module.bias is not None:
+            init.constant_(module.bias.data, 0.0)
+
+    elif isinstance(module, nn.Linear):
+        init.kaiming_normal_(module.weight.data, a=0.0, mode="fan_in")
+        module.weight.data *= scale
+
+        if module.bias is not None:
+            init.constant_(module.bias.data, 0.0)
 
 
 class ConvBlock(nn.Module):
@@ -202,6 +219,8 @@ class Generator(nn.Module):
             activation="tanh",
         )
 
+        self.apply(_init_scaled_weights)
+
     def forward(self, x: Tensor) -> Tensor:
         output = self.conv_block1(x)
         residual = output
@@ -261,6 +280,8 @@ class Discriminator(nn.Module):
             nn.LeakyReLU(0.2),
             nn.Linear(linear_layer_size, 1),
         )
+
+        self.apply(_init_scaled_weights)
 
     def forward(self, x: Tensor) -> Tensor:
         return self.layers(x)
