@@ -11,7 +11,7 @@ import config
 logger = config.create_logger("INFO", __file__)
 
 
-def _init_scaled_weights(module: nn.Module, scale: float = 0.1):
+def _init_scaled_weights(module: nn.Module, scale: float):
     if isinstance(module, nn.Conv2d):
         init.kaiming_normal_(module.weight.data, a=0.0, mode="fan_in")
         module.weight.data *= scale
@@ -133,7 +133,7 @@ class ResDenseBlock(nn.Module):
         for i in range(1, self.conv_layers_count):
             outputs.append(self.conv_layers[i](torch.cat(outputs, 1)))
 
-        return outputs[-1] * config.RES_SCALING_VALUE + x
+        return outputs[-1] * config.RESIDUAL_SCALING_VALUE + x
 
 
 class RRDB(nn.Module):
@@ -160,7 +160,7 @@ class RRDB(nn.Module):
         )
 
     def forward(self, x: Tensor) -> Tensor:
-        return self.layers(x) * config.RES_SCALING_VALUE + x
+        return self.layers(x) * config.RESIDUAL_SCALING_VALUE + x
 
 
 class Generator(nn.Module):
@@ -219,7 +219,9 @@ class Generator(nn.Module):
             activation="tanh",
         )
 
-        self.apply(_init_scaled_weights)
+        self.apply(
+            lambda fn: _init_scaled_weights(fn, scale=config.WEIGHTS_SCALING_VALUE)
+        )
 
     def forward(self, x: Tensor) -> Tensor:
         output = self.conv_block1(x)
@@ -281,7 +283,9 @@ class Discriminator(nn.Module):
             nn.Linear(linear_layer_size, 1),
         )
 
-        self.apply(_init_scaled_weights)
+        self.apply(
+            lambda fn: _init_scaled_weights(fn, scale=config.WEIGHTS_SCALING_VALUE)
+        )
 
     def forward(self, x: Tensor) -> Tensor:
         return self.layers(x)
