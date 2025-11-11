@@ -442,31 +442,21 @@ def load_checkpoint(
     discriminator_path = checkpoint_dir_path / "discriminator.safetensors"
     state_path = checkpoint_dir_path / "training_state.json"
 
-    if not generator_path.exists() or not state_path.exists():
+    if generator_path.exists():
+        generator.load_state_dict(load_file(filename=generator_path, device=device))
+    else:
         logger.warning(
             f"Checkpoint (generator.safetensors or training_state.json) was not found at '{checkpoint_dir_path}', starting from 1 epoch"
         )
         return 1
 
     if test_mode:
-        generator.load_state_dict(load_file(filename=generator_path, device=device))
         logger.info(
             f"Loaded Generator weights from '{checkpoint_dir_path}' (test_mode=True)"
         )
         return 1
 
-    if not discriminator_path.exists():
-        logger.warning(
-            f"Discriminator's weights were not found at '{checkpoint_dir_path}', starting from 1 epoch"
-        )
-        return 1
-
-    if discriminator and generator_optimizer and discriminator_optimizer:
-        generator.load_state_dict(load_file(filename=generator_path, device=device))
-        discriminator.load_state_dict(
-            load_file(filename=discriminator_path, device=device)
-        )
-
+    if state_path.exists():
         with open(state_path, "r") as f:
             full_metadata = json.load(f)
 
@@ -485,50 +475,57 @@ def load_checkpoint(
             metrics.generator_val_psnrs = metrics_dict["generator_val_psnrs"]
             metrics.generator_val_ssims = metrics_dict["generator_val_ssims"]
 
-        if generator_scaler and full_metadata["generator_scaler_state_dict"]:
+        if generator_optimizer:
+            _load_optimizer_state(
+                generator_optimizer,
+                checkpoint_dir_path,
+                "generator",
+                full_metadata,
+                device,
+            )
+
+        if generator_scaler and full_metadata.get("generator_scaler_state_dict"):
             generator_scaler.load_state_dict(
                 full_metadata["generator_scaler_state_dict"]
             )
 
-        if discriminator_scaler and full_metadata["discriminator_scaler_state_dict"]:
-            discriminator_scaler.load_state_dict(
-                full_metadata["discriminator_scaler_state_dict"]
-            )
-
-        if generator_scheduler and full_metadata["generator_scheduler_state_dict"]:
+        if generator_scheduler and full_metadata.get("generator_scheduler_state_dict"):
             generator_scheduler.load_state_dict(
                 full_metadata["generator_scheduler_state_dict"]
             )
 
-        if (
-            discriminator_scheduler
-            and full_metadata["discriminator_scheduler_state_dict"]
-        ):
-            discriminator_scheduler.load_state_dict(
-                full_metadata["discriminator_scheduler_state_dict"]
+        if discriminator and discriminator_optimizer:
+            discriminator.load_state_dict(
+                load_file(filename=discriminator_path, device=device)
             )
 
-        _load_optimizer_state(
-            generator_optimizer,
-            checkpoint_dir_path,
-            "generator",
-            full_metadata,
-            device,
-        )
+            _load_optimizer_state(
+                discriminator_optimizer,
+                checkpoint_dir_path,
+                "discriminator",
+                full_metadata,
+                device,
+            )
 
-        _load_optimizer_state(
-            discriminator_optimizer,
-            checkpoint_dir_path,
-            "discriminator",
-            full_metadata,
-            device,
-        )
+            if discriminator_scaler and full_metadata.get(
+                "discriminator_scaler_state_dict"
+            ):
+                discriminator_scaler.load_state_dict(
+                    full_metadata["discriminator_scaler_state_dict"]
+                )
+
+            if discriminator_scheduler and full_metadata.get(
+                "discriminator_scheduler_state_dict"
+            ):
+                discriminator_scheduler.load_state_dict(
+                    full_metadata["discriminator_scheduler_state_dict"]
+                )
 
         logger.info(f'Checkpoint was loaded from "{checkpoint_dir_path}"')
 
         return full_metadata["epoch"]
     else:
-        logger.error("Not enought arguments passed to the load_checkpoint function")
+        logger.error("State path does not exists, can not load model parameters")
         return 0
 
 
