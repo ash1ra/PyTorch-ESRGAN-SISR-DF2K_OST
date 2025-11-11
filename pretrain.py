@@ -44,9 +44,6 @@ def train_step(
         with autocast(device, enabled=(generator_scaler is not None)):
             sr_img_tensor = generator(lr_img_tensor)
 
-            # sr_img_tensor_normalized = convert_img(sr_img_tensor, "[-1, 1]", "imagenet")
-            # hr_img_tensor_normalized = convert_img(hr_img_tensor, "[-1, 1]", "imagenet")
-
             content_loss = content_loss_fn(sr_img_tensor, hr_img_tensor)
 
         total_generator_loss += content_loss.item()
@@ -87,9 +84,6 @@ def validation_step(
             lr_img_tensor = lr_img_tensor.to(device, non_blocking=True)
 
             sr_img_tensor = generator(lr_img_tensor)
-
-            # sr_img_tensor_normalized = convert_img(sr_img_tensor, "[-1, 1]", "imagenet")
-            # hr_img_tensor_normalized = convert_img(hr_img_tensor, "[-1, 1]", "imagenet")
 
             content_loss = content_loss_fn(sr_img_tensor, hr_img_tensor)
 
@@ -306,7 +300,7 @@ def main() -> None:
     generator_scheduler = MultiStepLR(
         optimizer=generator_optimizer,
         milestones=config.SCHEDULER_MILESTONES,
-        gamma=config.SCHEDULER_GAMMA,
+        gamma=config.SCHEDULER_SCALING_VALUE,
     )
 
     start_epoch = 1
