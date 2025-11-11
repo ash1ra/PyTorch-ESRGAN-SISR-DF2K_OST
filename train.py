@@ -41,10 +41,13 @@ def train_step(
     device: Literal["cuda", "cpu"] = "cpu",
 ) -> tuple[float, float]:
     total_generator_loss = 0.0
-    total_discrimination_loss = 0.0
+    total_discriminator_loss = 0.0
 
     generator.train()
     discriminator.train()
+
+    generator_optimizer.zero_grad()
+    discriminator_optimizer.zero_grad()
 
     for i, (hr_img_tensor, lr_img_tensor) in enumerate(data_loader):
         hr_img_tensor = hr_img_tensor.to(device, non_blocking=True)
@@ -87,23 +90,20 @@ def train_step(
 
             pixel_loss = pixel_loss_fn(sr_img_tensor, hr_img_tensor)
 
-            total_generator_loss = (
+            generator_loss = (
                 content_loss
-                + config.PERCEPTUAL_LOSS_LAMBDA * adversarial_loss
-                + config.PERCEPTUAL_LOSS_ETA * pixel_loss
+                + config.ADVERSARIAL_LOSS_SCALING_VALUE * adversarial_loss
+                + config.PIXEL_LOSS_SCALING_VALUE * pixel_loss
             )
 
-        total_generator_loss += total_generator_loss.item()
+            generator_loss_w_graph = generator_loss / config.GRADIENT_ACCUMULATION_STEPS
 
-        generator_optimizer.zero_grad()
+        total_generator_loss += generator_loss.item()
 
         if generator_scaler:
-            generator_scaler.scale(total_generator_loss).backward()
-            generator_scaler.step(generator_optimizer)
-            generator_scaler.update()
+            generator_scaler.scale(generator_loss_w_graph).backward()
         else:
-            total_generator_loss.backward()
-            generator_optimizer.step()
+            generator_loss_w_graph.backward()
 
         with autocast(device, enabled=(discriminator_scaler is not None)):
             hr_discriminated = discriminator(hr_img_tensor_normalized)
@@ -126,25 +126,42 @@ def train_step(
                 )
             ) / 2
 
-        total_discrimination_loss += adversarial_loss.item()
+            adversarial_loss_w_graph = (
+                adversarial_loss / config.GRADIENT_ACCUMULATION_STEPS
+            )
 
-        discriminator_optimizer.zero_grad()
+        total_discriminator_loss += adversarial_loss.item()
 
         if discriminator_scaler:
-            discriminator_scaler.scale(adversarial_loss).backward()
-            discriminator_scaler.step(discriminator_optimizer)
-            discriminator_scaler.update()
+            discriminator_scaler.scale(adversarial_loss_w_graph).backward()
         else:
-            adversarial_loss.backward()
-            discriminator_optimizer.step()
+            adversarial_loss_w_graph.backward()
+
+        if (i + 1) % config.GRADIENT_ACCUMULATION_STEPS == 0 or (i + 1) == len(
+            data_loader
+        ):
+            if generator_scaler:
+                generator_scaler.step(generator_optimizer)
+                generator_scaler.update()
+            else:
+                generator_optimizer.step()
+
+            if discriminator_scaler:
+                discriminator_scaler.step(discriminator_optimizer)
+                discriminator_scaler.update()
+            else:
+                discriminator_optimizer.step()
+
+            generator_optimizer.zero_grad()
+            discriminator_optimizer.zero_grad()
 
         if i % config.PRINT_FREQUENCY == 0:
             logger.debug(f"Processing batch {i}/{len(data_loader)}...")
 
-    total_generator_loss /= len(data_loader)
-    total_discrimination_loss /= len(data_loader)
+    total_generator_loss *= config.GRADIENT_ACCUMULATION_STEPS / len(data_loader)
+    total_discriminator_loss *= config.GRADIENT_ACCUMULATION_STEPS / len(data_loader)
 
-    return total_generator_loss, total_discrimination_loss
+    return total_generator_loss, total_discriminator_loss
 
 
 def validation_step(
@@ -400,7 +417,7 @@ def main() -> None:
 
     train_data_loader = DataLoader(
         dataset=train_dataset,
-        batch_size=config.TRAIN_BATCH_SIZE,
+        batch_size=config.REAL_TRAIN_BATCH_SIZE,
         shuffle=True,
         pin_memory=True if device == "cuda" else False,
         num_workers=config.NUM_WORKERS,
@@ -408,7 +425,7 @@ def main() -> None:
 
     val_data_loader = DataLoader(
         dataset=val_dataset,
-        batch_size=config.TRAIN_BATCH_SIZE,
+        batch_size=config.REAL_TRAIN_BATCH_SIZE,
         shuffle=False,
         pin_memory=True if device == "cuda" else False,
         num_workers=config.NUM_WORKERS,
@@ -452,12 +469,12 @@ def main() -> None:
     generator_scheduler = MultiStepLR(
         optimizer=generator_optimizer,
         milestones=config.SCHEDULER_MILESTONES,
-        gamma=config.SCHEDULER_GAMMA,
+        gamma=config.SCHEDULER_SCALING_VALUE,
     )
     discriminator_scheduler = MultiStepLR(
         optimizer=discriminator_optimizer,
         milestones=config.SCHEDULER_MILESTONES,
-        gamma=config.SCHEDULER_GAMMA,
+        gamma=config.SCHEDULER_SCALING_VALUE,
     )
 
     start_epoch = 1
@@ -523,7 +540,7 @@ def main() -> None:
 
                 logger.info(f"Schedulers advanced to epoch {start_epoch}")
         else:
-            logger.info(
+            logger.warning(
                 "ESRGAN checkpoints not found, start training from the beginning..."
             )
 
