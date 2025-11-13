@@ -287,8 +287,9 @@ def train(
     logger.info("Starting model training...")
 
     try:
+        training_start_time = time()
         for epoch in range(start_epoch, epochs + 1):
-            start_time = time()
+            epoch_start_time = time()
 
             generator_train_loss, discriminator_train_loss = train_step(
                 data_loader=train_data_loader,
@@ -325,8 +326,9 @@ def train(
             if discriminator_scheduler:
                 discriminator_scheduler.step()
 
-            end_time = time() - start_time
+            end_time = time() - epoch_start_time
             epoch_time = format_time(end_time)
+            elapsed_time = format_time(time() - training_start_time)
             remaining_time = format_time(end_time * (epochs - epoch))
 
             generator_optimizer_lr = generator_optimizer.param_groups[0]["lr"]
@@ -341,7 +343,7 @@ def train(
             metrics.generator_val_ssims.append(generator_val_ssim)
 
             logger.info(
-                f"Epoch: {epoch}/{epochs} ({epoch_time}/{remaining_time}) | Generator LR: {generator_optimizer_lr} | Discriminator LR: {discriminator_optimizer_lr}"
+                f"Epoch: {epoch}/{epochs} ({epoch_time} | {elapsed_time}/{remaining_time}) | Generator LR: {generator_optimizer_lr} | Discriminator LR: {discriminator_optimizer_lr}"
             )
             logger.info(
                 f"Generator Train Loss: {generator_train_loss:.4f} | Discriminator Train Loss: {discriminator_train_loss:.4f} | Generator Val Loss: {generator_val_loss:.4f} | Generator Val PSNR: {generator_val_psnr:.4f} | Generator Val SSIM: {generator_val_ssim:.4f}"
