@@ -65,14 +65,14 @@ def train_step(
                 hr_img_tensor_normalized
             ).detach()
 
-            hr_discriminated = discriminator(hr_img_tensor_normalized).detach()
-            sr_discriminated = discriminator(sr_img_tensor_normalized)
+            hr_discriminated = discriminator(hr_img_tensor).detach()
+            sr_discriminated = discriminator(sr_img_tensor)
 
             hr_discriminated_avg = hr_discriminated.mean(dim=0, keepdim=True)
             sr_discriminated_avg = sr_discriminated.mean(dim=0, keepdim=True)
 
-            hr_discriminated_relative = hr_discriminated - hr_discriminated_avg
-            sr_discriminated_relative = sr_discriminated - sr_discriminated_avg
+            hr_discriminated_relative = hr_discriminated - sr_discriminated_avg
+            sr_discriminated_relative = sr_discriminated - hr_discriminated_avg
 
             adversarial_loss = (
                 adversarial_loss_fn(
@@ -107,14 +107,14 @@ def train_step(
             generator_loss_w_graph.backward()
 
         with autocast(device, enabled=(discriminator_scaler is not None)):
-            hr_discriminated = discriminator(hr_img_tensor_normalized)
-            sr_discriminated = discriminator(sr_img_tensor_normalized.detach())
+            hr_discriminated = discriminator(hr_img_tensor)
+            sr_discriminated = discriminator(sr_img_tensor.detach())
 
             hr_discriminated_avg = hr_discriminated.mean(dim=0, keepdim=True)
             sr_discriminated_avg = sr_discriminated.mean(dim=0, keepdim=True)
 
-            hr_discriminated_relative = hr_discriminated - hr_discriminated_avg
-            sr_discriminated_relative = sr_discriminated - sr_discriminated_avg
+            hr_discriminated_relative = hr_discriminated - sr_discriminated_avg
+            sr_discriminated_relative = sr_discriminated - hr_discriminated_avg
 
             adversarial_loss = (
                 adversarial_loss_fn(
@@ -421,12 +421,13 @@ def main() -> None:
         data_path=config.VAL_DATASET_PATH,
         scaling_factor=config.SCALING_FACTOR,
         crop_size=config.CROP_SIZE,
+        test_mode=True,
         dev_mode=config.DEV_MODE,
     )
 
     train_data_loader = DataLoader(
         dataset=train_dataset,
-        batch_size=config.REAL_TRAIN_BATCH_SIZE,
+        batch_size=config.TEST_BATCH_SIZE,
         shuffle=True,
         pin_memory=True if device == "cuda" else False,
         num_workers=config.NUM_WORKERS,

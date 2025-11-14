@@ -266,6 +266,7 @@ def main() -> None:
         data_path=config.VAL_DATASET_PATH,
         scaling_factor=config.SCALING_FACTOR,
         crop_size=config.CROP_SIZE,
+        test_mode=True,
         dev_mode=config.DEV_MODE,
     )
 
@@ -279,7 +280,7 @@ def main() -> None:
 
     val_data_loader = DataLoader(
         dataset=val_dataset,
-        batch_size=config.TRAIN_BATCH_SIZE,
+        batch_size=config.TEST_BATCH_SIZE,
         shuffle=False,
         pin_memory=True if device == "cuda" else False,
         num_workers=config.NUM_WORKERS,
