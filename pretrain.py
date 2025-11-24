@@ -143,7 +143,7 @@ def train(
     logger.info(f"Scaling factor: {config.SCALING_FACTOR}")
     logger.info(f"Crop size: {config.CROP_SIZE}")
     logger.info(f"Batch size: {config.TRAIN_BATCH_SIZE}")
-    logger.info(f"Learning rate: {config.LEARNING_RATE}")
+    logger.info(f"Learning rate: {config.GENERATOR_LEARNING_RATE}")
     logger.info(f"Epochs: {config.EPOCHS}")
     logger.info(f"Number of workers: {config.NUM_WORKERS}")
     logger.info("-" * dashes_count)
@@ -272,7 +272,7 @@ def main() -> None:
 
     train_data_loader = DataLoader(
         dataset=train_dataset,
-        batch_size=config.TRAIN_BATCH_SIZE,
+        batch_size=config.REAL_TRAIN_BATCH_SIZE,
         shuffle=True,
         pin_memory=True if device == "cuda" else False,
         num_workers=config.NUM_WORKERS,
@@ -302,7 +302,9 @@ def main() -> None:
     psnr_metric = PeakSignalNoiseRatio(data_range=1.0).to(device)
     ssim_metric = StructuralSimilarityIndexMeasure(data_range=1.0).to(device)
 
-    generator_optimizer = optim.Adam(generator.parameters(), lr=config.LEARNING_RATE)
+    generator_optimizer = optim.Adam(
+        generator.parameters(), lr=config.GENERATOR_LEARNING_RATE
+    )
     generator_scaler = GradScaler(device) if device == "cuda" else None
     generator_scheduler = MultiStepLR(
         optimizer=generator_optimizer,

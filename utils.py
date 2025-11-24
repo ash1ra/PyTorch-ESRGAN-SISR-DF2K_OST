@@ -182,7 +182,7 @@ def compare_imgs(
     orientation: Literal["horizontal", "vertical"] = "vertical",
 ) -> None:
     bicubic_label = "Bicubic"
-    sr_label = "SRGAN"
+    sr_label = "ESRGAN"
     hr_label = "Original"
 
     lr_img = convert_img(lr_img_tensor, "[-1, 1]", "pil")
@@ -541,7 +541,7 @@ def format_time(total_seconds: float) -> str:
 
 
 def create_hyperparameters_str() -> str:
-    return f"Scaling factor: {config.SCALING_FACTOR} | Crop size: {config.CROP_SIZE} | Batch size: {config.TRAIN_BATCH_SIZE} | Learning rate: {config.LEARNING_RATE} | Epochs: {config.EPOCHS} | Number of workers: {config.NUM_WORKERS} | Dev mode: {config.DEV_MODE}"
+    return f"Scaling factor: {config.SCALING_FACTOR} | Crop size: {config.CROP_SIZE} | Batch size: {config.TRAIN_BATCH_SIZE} | Generator learning rate: {config.GENERATOR_LEARNING_RATE} | Discriminator learning rate: {config.DISCRIMINATOR_LEARNING_RATE}| Epochs: {config.EPOCHS} | Number of workers: {config.NUM_WORKERS} | Dev mode: {config.DEV_MODE}"
 
 
 def plot_training_metrics(

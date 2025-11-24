@@ -295,7 +295,7 @@ def main() -> None:
         create_comparisson=True,
         comparisson_path=config.INFERECE_COMPARISON_IMG_PATH,
         orientation="vertical",
-        use_network_interpolation=True,
+        use_network_interpolation=False,
         alpha=0.8,
         device=device,
     )

@@ -113,8 +113,8 @@ def train_step(
             hr_discriminated_avg = hr_discriminated.mean(dim=0, keepdim=True)
             sr_discriminated_avg = sr_discriminated.mean(dim=0, keepdim=True)
 
-            hr_discriminated_relative = hr_discriminated - sr_discriminated_avg
-            sr_discriminated_relative = sr_discriminated - hr_discriminated_avg
+            hr_discriminated_relative = hr_discriminated - sr_discriminated_avg.detach()
+            sr_discriminated_relative = sr_discriminated - hr_discriminated_avg.detach()
 
             adversarial_loss = (
                 adversarial_loss_fn(
@@ -260,7 +260,6 @@ def train(
     logger.info(f"Scaling factor: {config.SCALING_FACTOR}")
     logger.info(f"Crop size: {config.CROP_SIZE}")
     logger.info(f"Batch size: {config.TRAIN_BATCH_SIZE}")
-    logger.info(f"Learning rate: {config.LEARNING_RATE}")
     logger.info(f"Epochs: {config.EPOCHS}")
     logger.info(f"Number of workers: {config.NUM_WORKERS}")
     logger.info("-" * dashes_count)
@@ -275,6 +274,7 @@ def train(
     )
     logger.info(f"Large kernel size: {config.GENERATOR_LARGE_KERNEL_SIZE}")
     logger.info(f"Small kernel size: {config.GENERATOR_SMALL_KERNEL_SIZE}")
+    logger.info(f"Generator initial learning rate: {config.GENERATOR_LEARNING_RATE}")
     logger.info("-" * dashes_count)
     logger.info("Discriminator:")
     logger.info(f"Count of channels: {config.DISCRIMINATOR_CHANNELS_COUNT}")
@@ -283,6 +283,9 @@ def train(
         f"Size of the first linear layer: {config.DISCRIMINATOR_LINEAR_LAYER_SIZE}"
     )
     logger.info(f"Kernel size: {config.DISCRIMINATOR_KERNEL_SIZE}")
+    logger.info(
+        f"Discriminator initial learning rate: {config.DISCRIMINATOR_LEARNING_RATE}"
+    )
     logger.info("-" * dashes_count)
     logger.info("Starting model training...")
 
@@ -427,7 +430,7 @@ def main() -> None:
 
     train_data_loader = DataLoader(
         dataset=train_dataset,
-        batch_size=config.TEST_BATCH_SIZE,
+        batch_size=config.REAL_TRAIN_BATCH_SIZE,
         shuffle=True,
         pin_memory=True if device == "cuda" else False,
         num_workers=config.NUM_WORKERS,
@@ -435,7 +438,7 @@ def main() -> None:
 
     val_data_loader = DataLoader(
         dataset=val_dataset,
-        batch_size=config.REAL_TRAIN_BATCH_SIZE,
+        batch_size=config.TEST_BATCH_SIZE,
         shuffle=False,
         pin_memory=True if device == "cuda" else False,
         num_workers=config.NUM_WORKERS,
@@ -468,13 +471,15 @@ def main() -> None:
     psnr_metric = PeakSignalNoiseRatio(data_range=1.0).to(device)
     ssim_metric = StructuralSimilarityIndexMeasure(data_range=1.0).to(device)
 
-    generator_optimizer = optim.Adam(generator.parameters(), lr=config.LEARNING_RATE)
+    generator_optimizer = optim.Adam(
+        generator.parameters(), lr=config.GENERATOR_LEARNING_RATE
+    )
     discriminator_optimizer = optim.Adam(
-        discriminator.parameters(), lr=config.LEARNING_RATE
+        discriminator.parameters(), lr=config.DISCRIMINATOR_LEARNING_RATE
     )
 
-    generator_scaler = GradScaler(device) if device == "cuda" else None
-    discriminator_scaler = GradScaler(device) if device == "cuda" else None
+    # generator_scaler = GradScaler(device) if device == "cuda" else None
+    # discriminator_scaler = GradScaler(device) if device == "cuda" else None
 
     generator_scheduler = MultiStepLR(
         optimizer=generator_optimizer,
@@ -534,8 +539,8 @@ def main() -> None:
                 generator_optimizer=generator_optimizer,
                 discriminator_optimizer=discriminator_optimizer,
                 metrics=metrics,
-                generator_scaler=generator_scaler,
-                discriminator_scaler=discriminator_scaler,
+                # generator_scaler=generator_scaler,
+                # discriminator_scaler=discriminator_scaler,
                 generator_scheduler=generator_scheduler,
                 discriminator_scheduler=discriminator_scheduler,
                 device=device,
@@ -570,8 +575,8 @@ def main() -> None:
         metrics=metrics,
         psnr_metric=psnr_metric,
         ssim_metric=ssim_metric,
-        generator_scaler=generator_scaler,
-        discriminator_scaler=discriminator_scaler,
+        # generator_scaler=generator_scaler,
+        # discriminator_scaler=discriminator_scaler,
         generator_scheduler=generator_scheduler,
         discriminator_scheduler=discriminator_scheduler,
         device=device,

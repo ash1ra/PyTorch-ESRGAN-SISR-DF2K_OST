@@ -12,14 +12,7 @@ logger = config.create_logger("INFO", __file__)
 
 
 def _init_scaled_weights(module: nn.Module, scale: float):
-    if isinstance(module, nn.Conv2d):
-        init.kaiming_normal_(module.weight.data, a=0.0, mode="fan_in")
-        module.weight.data *= scale
-
-        if module.bias is not None:
-            init.constant_(module.bias.data, 0.0)
-
-    elif isinstance(module, nn.Linear):
+    if isinstance(module, nn.Conv2d) or isinstance(module, nn.Linear):
         init.kaiming_normal_(module.weight.data, a=0.0, mode="fan_in")
         module.weight.data *= scale
 
@@ -34,8 +27,10 @@ class ConvBlock(nn.Module):
         out_channels: int,
         kernel_size: int,
         stride: int = 1,
-        norm_layer: bool = False,
+        padding: int = 1,
         activation: Literal["leaky_relu", "tanh"] | None = None,
+        bias: bool = True,
+        norm_layer: bool = False,
     ) -> None:
         super().__init__()
 
@@ -47,7 +42,8 @@ class ConvBlock(nn.Module):
                 out_channels=out_channels,
                 kernel_size=kernel_size,
                 stride=stride,
-                padding=kernel_size // 2,
+                padding=padding,
+                bias=bias,
             )
         )
 
@@ -57,7 +53,12 @@ class ConvBlock(nn.Module):
         if activation:
             match activation.lower():
                 case "leaky_relu":
-                    self.conv_block.append(nn.LeakyReLU(0.2))
+                    self.conv_block.append(
+                        nn.LeakyReLU(
+                            negative_slope=config.LEAKY_RELU_NEGATIVE_SLOPE_VALUE,
+                            inplace=True,
+                        )
+                    )
                 case "tanh":
                     self.conv_block.append(nn.Tanh())
 
@@ -75,11 +76,10 @@ class SubPixelConvBlock(nn.Module):
         super().__init__()
 
         self.subpixel_conv_block = nn.Sequential(
-            nn.Conv2d(
+            ConvBlock(
                 in_channels=channels_count,
                 out_channels=channels_count * (scaling_factor**2),
                 kernel_size=kernel_size,
-                padding=kernel_size // 2,
             ),
             nn.PixelShuffle(upscale_factor=scaling_factor),
             nn.PReLU(),
@@ -99,7 +99,7 @@ class ResDenseBlock(nn.Module):
     ) -> None:
         super().__init__()
 
-        self.conv_layers_count = conv_layers_count  # type: ignore
+        self.conv_layers_count: int = conv_layers_count
         self.conv_layers = nn.ModuleList()
 
         self.conv_layers.append(
@@ -184,6 +184,7 @@ class Generator(nn.Module):
             in_channels=3,
             out_channels=channels_count,
             kernel_size=large_kernel_size,
+            padding=4,
         )
 
         self.rrdb = nn.Sequential(
@@ -220,6 +221,7 @@ class Generator(nn.Module):
             in_channels=channels_count,
             out_channels=3,
             kernel_size=large_kernel_size,
+            padding=4,
             activation="tanh",
         )
 
@@ -257,6 +259,7 @@ class Discriminator(nn.Module):
                 out_channels=channels_count,
                 kernel_size=kernel_size,
                 activation="leaky_relu",
+                norm_layer=True,
             )
         )
 
@@ -272,8 +275,8 @@ class Discriminator(nn.Module):
                     out_channels=out_channels,
                     kernel_size=kernel_size,
                     stride=stride,
-                    norm_layer=True,
                     activation="leaky_relu",
+                    norm_layer=True,
                 )
             )
 
@@ -288,10 +291,6 @@ class Discriminator(nn.Module):
             nn.Linear(linear_layer_size, 1),
         )
 
-        self.apply(
-            lambda fn: _init_scaled_weights(fn, scale=config.WEIGHTS_SCALING_VALUE)
-        )
-
     def forward(self, x: Tensor) -> Tensor:
         return self.layers(x)
 
@@ -302,7 +301,7 @@ class TruncatedVGG19(nn.Module):
 
         vgg19_model = vgg19(weights=VGG19_Weights.DEFAULT)
 
-        self.features = nn.Sequential(*list(vgg19_model.features.children())[:35])
+        self.features = vgg19_model.features[:35]
 
         self.features.eval()
         for param in self.features.parameters():
