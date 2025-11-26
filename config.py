@@ -95,7 +95,7 @@ def create_logger(
 
     if not log_file_name:
         current_date = datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-        log_file_name = f"logs/srgan_{Path(caller_file_name).stem}_{current_date}.log"
+        log_file_name = f"logs/esrgan_{Path(caller_file_name).stem}_{current_date}.log"
 
     log_file_path = Path(log_file_name)
     log_file_path.parent.mkdir(parents=True, exist_ok=True)
